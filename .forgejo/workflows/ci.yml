@@ -1,3 +1,8 @@
+# CI runs on a self-hosted runner selected by the `CI_RUNNER_LABEL` repository
+# (or org) variable — see `runs-on:` on each job below. Set it to a label your
+# runner advertises (e.g. `self-hosted`). If it is unset, `runs-on` evaluates to
+# an empty string, which matches no runner, so every job is silently skipped
+# with no error explaining why.
 name: ci
 
 on:
@@ -6,12 +11,17 @@ on:
   pull_request:
 
 jobs:
-  # Daemon-free protection for the Dockerfile (issue #11). The self-hosted runner
-  # has no Docker daemon, so we cannot `docker build`; Hadolint is a single static
-  # binary that lints the Dockerfile itself — catching bad COPY paths, a dropped
-  # USER, unpinned bases, and best-practice regressions without a daemon.
+  # Daemon-free protection for the Dockerfile (issue #11). The CI runner has no
+  # Docker daemon, so we cannot `docker build`; Hadolint is a single static
+  # binary that lints the Dockerfile itself — catching unpinned/untagged bases,
+  # ADD-vs-COPY misuse, and Dockerfile best-practice regressions without a
+  # daemon. A static linter does NOT catch bad COPY sources or a dropped USER
+  # (it cannot see the build context): a bad COPY source fails a real
+  # `docker build`, but a dropped USER still builds fine and only shows up at
+  # runtime, so catching it needs a build-and-run check that asserts the
+  # container's effective uid (option 2 in #11 / infrastructure/development#508).
   hadolint:
-    runs-on: self-hosted
+    runs-on: ${{ vars.CI_RUNNER_LABEL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,7 +47,7 @@ jobs:
         run: /tmp/hadolint Dockerfile
 
   test:
-    runs-on: self-hosted
+    runs-on: ${{ vars.CI_RUNNER_LABEL }}
     strategy:
       fail-fast: false
       matrix:

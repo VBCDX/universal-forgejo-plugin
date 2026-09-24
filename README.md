@@ -235,3 +235,10 @@ node bin/vbcdx-forgejo.js mcp           # stdio MCP server
 npm ci
 npm test
 ```
+
+## Continuous integration
+
+CI runs on a self-hosted runner selected by the `CI_RUNNER_LABEL` repository (or
+org) variable. Set it to a label your runner advertises (e.g. `self-hosted`). If
+it is unset, the workflow's `runs-on` evaluates to an empty string, which matches
+no runner, so every job is silently skipped with no error explaining why.
