@@ -84,7 +84,8 @@ uses the **network transport** described next.
 `vbcdx-forgejo serve` starts an MCP server over the **Streamable HTTP** transport
 (the current MCP network transport; responses are streamed over Server-Sent
 Events). It exposes the **same finite 33-tool catalogue** — it is **not** a
-generic Forgejo API proxy.
+generic Forgejo API proxy. For a worked client setup, see
+[Using with Hermes Agent](#using-with-hermes-agent).
 
 ```sh
 VBCDX_FORGEJO_URL=https://git.example.com \
@@ -166,6 +167,52 @@ docker run --rm -p 8443:8443 \
   -v /path/to/tls:/tls:ro \
   vbcdx-forgejo
 ```
+
+### Using with Hermes Agent
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) is an MCP client
+that connects to stdio servers (`command`) and to HTTP servers (`url` +
+`headers`). Use `serve` rather than the stdio companion when Hermes runs
+somewhere the stdio path can't reach: for example a container without Node.js
+(the stdio companion needs Node.js ≥ 22), or one Hermes profile per agent, where
+each profile has its own `HERMES_HOME` with its own `config.yaml` and `.env` and
+no `credential_file` on the machine that runs the server.
+
+The request path is:
+
+```text
+Hermes profile ──▶ LiteLLM MCP gateway (auth_type: true_passthrough) ──▶ vbcdx-forgejo serve ──▶ Forgejo
+```
+
+Each agent sends its **own** Forgejo token in the `Authorization` header on
+every request. LiteLLM's `true_passthrough` mode forwards the caller's
+`Authorization` header to the upstream MCP server unchanged instead of treating
+it as a LiteLLM key. `serve` uses the header for that one request only. It never
+caches it and never logs header values. The LiteLLM hop is optional: Hermes can
+point `url` straight at `serve`'s `/mcp` endpoint.
+
+In each profile's `$HERMES_HOME/config.yaml` (default `~/.hermes/config.yaml`):
+
+```yaml
+mcp_servers:
+  forgejo:
+    # LiteLLM's MCP route for this server, or serve's own /mcp endpoint.
+    url: "https://mcp-gateway.example.com/mcp/forgejo"
+    headers:
+      Authorization: "Bearer ${FORGEJO_TOKEN}"
+```
+
+and that agent's token in the same profile's `$HERMES_HOME/.env`:
+
+```sh
+FORGEJO_TOKEN=<this agent's Forgejo personal access token>
+```
+
+Hermes resolves `${VAR}` placeholders in `headers` from the environment,
+including the profile's `.env`, when it connects. A `url` entry with no
+`transport` key uses Streamable HTTP, which is what `serve` speaks. Do not set
+`transport: sse`. After editing, run `/reload-mcp`. The tools show up in Hermes as
+`mcp_forgejo_<tool>` (for example `mcp_forgejo_whoami`).
 
 ## Registration
 
